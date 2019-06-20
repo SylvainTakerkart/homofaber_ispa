@@ -1,0 +1,24 @@
+import os.path as op
+import os
+import numpy as np
+import shutil
+import subprocess
+
+code_root_dir = '/envau/userspace/takerkart/python/homofaber_mvpa/homofaber_ispa/crossmodal_searchlight/shifters_vs_lin'
+
+subjects_list = ['homofaber_00', 'homofaber_01', 'homofaber_02', 'homofaber_03', 'homofaber_04',
+                 'homofaber_05', 'homofaber_06', 'homofaber_07', 'homofaber_08', 'homofaber_09',
+                 'homofaber_11', 'homofaber_12', 'homofaber_13', 'homofaber_14', 'homofaber_16']
+
+subjects_list = ['homofaber_00']
+
+modality_list = ['A','V']
+
+searchlight_radius = 9.
+
+for split_ind, subject in enumerate(subjects_list):
+    for train_modality in modality_list:
+        for test_modality in modality_list:
+            cmd = "frioul_batch -c 4 'anaconda_setup; python {}/03_homofaber_intersubject_searchlight_crossmodalities_decoding.py {:02d} {} {} {:1.2f}'".format(split_ind, train_modality, test_modality, searchlight_radius)
+            print(cmd)
+            subprocess.run(bv_cmd,shell=True)
