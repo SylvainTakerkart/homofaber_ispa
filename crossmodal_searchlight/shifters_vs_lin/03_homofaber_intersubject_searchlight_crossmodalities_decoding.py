@@ -57,17 +57,39 @@ classif_metadata_dir = op.join(root_dir,
                                mvpa_subdir,
                                'mvpa_task_definition',
                                'within_sess_perms_correct_trials')
+
+roi_xval_dir = op.join(root_dir,
+                       mvpa_subdir,
+                       'roi_xval_within_across_modalities')
+
+
 # defining all output directories
-searchlight_res_dir = op.join(root_dir,
-                              mvpa_subdir,
-                              'intersubj_Cbeta_normalized_searchlight_res')
-if not(op.exists(searchlight_res_dir)):
-    os.makedirs(searchlight_res_dir)
-    print('Creating new directory to save results: {}'.format(searchlight_res_dir))
-single_split_res_dir = op.join(searchlight_res_dir,'single_split_maps')
-if not(op.exists(single_split_res_dir)):
-    os.makedirs(single_split_res_dir)
-    print('Creating new directory to save single split searchlight maps: {}'.format(single_split_res_dir))
+##### OUTPUT DIRS to be DEFINED properly
+# searchlight_res_dir = op.join(root_dir,
+#                               mvpa_subdir,
+#                               'intersubj_Cbeta_normalized_searchlight_res')
+# if not(op.exists(searchlight_res_dir)):
+#     os.makedirs(searchlight_res_dir)
+#     print('Creating new directory to save results: {}'.format(searchlight_res_dir))
+# single_split_res_dir = op.join(searchlight_res_dir,'single_split_maps')
+# if not(op.exists(single_split_res_dir)):
+#     os.makedirs(single_split_res_dir)
+#     print('Creating new directory to save single split searchlight maps: {}'.format(single_split_res_dir))
+
+
+roi_xval_path = op.join(roi_xval_dir,"xval_inds_leave{}subjectsout.jl".format(n_leftout_subjects))
+
+
+# read mask_nii and fmri_img if it exists already!
+
+
+
+
+
+
+
+
+
 
 
 y = []
@@ -102,53 +124,71 @@ mask_nii = intersect_masks(subjmask_list)
 print("Concatenating the data from all the subjects...")
 fmri_img = concat_imgs(fmri_nii_list)
 
-loso = LeaveOneGroupOut()
-n_splits = len(subjects_list)
-
-y = np.array(y)
-y_permuted = y
-single_split_path_list = []
-print("Launching cross-validation...")
-for split_ind, (train_inds,test_inds) in enumerate(loso.split(subj_vect,subj_vect,subj_vect)):
-    print("...split {:02d} of {:02d}".format(split_ind+1, n_splits))
-    single_split = [(train_inds,test_inds)]
-    y_train = y_permuted[train_inds]
-    n_samples = len(y_train)
-    class_labels = np.unique(y_train)
-    n_classes = len(class_labels)
-    weights_list = []
-    for c in class_labels:
-        weight = float(n_samples) / (n_classes * np.sum(y_train == c))
-        weights_list.append(weight)
-    class_weight = {class_labels[0]: weights_list[0], class_labels[1]: weights_list[1]}
-    print('Class weights used for classifier estimation:', class_weight)
-    # define our estimator (which uses the weights!)
-    #weighted_clf = SVC(kernel="linear", class_weight=class_weight, C=0.001)
-    weighted_clf = LogisticRegression(C=0.1, class_weight=class_weight)
-    # now we can call the searchlight with all these options
-    print("...preparing searchlight for this split")
-    searchlight = SearchLight(mask_nii,
-                              process_mask_img=mask_nii,
-                              radius=searchlight_radius,
-                              n_jobs=n_jobs,
-                              verbose=1,
-                              cv=single_split,
-                              scoring=make_scorer(balanced_accuracy),
-                              estimator=weighted_clf)
-    print("...fitting searchlight for this split!")
-    searchlight.fit(fmri_img, y_permuted)
+# write mask_nii and fmri_img if it does not exist yet!
 
 
-    single_split_nii = new_img_like(mask_nii,searchlight.scores_)
-    single_split_path = op.join(single_split_res_dir,'intersubj_balancedacc_rad{:05.2f}mm_{}_permut{:04d}_split{:1d}of{:1d}.nii.gz'.format(searchlight_radius,crossval_case,permutation_ind,split_ind+1,n_splits))
-    print('Saving score map for {} and fold number {:02d}'.format(subject,split_ind+1))
-    single_split_nii.to_filename(single_split_path)
-    single_split_path_list.append(single_split_path)
+# 0. definition of the parameters
+current_split = 12
+train_modality = 'A'
+test_modality = 'V'
+radius = 3
 
-mean_splits_nii = mean_img(single_split_path_list)
-mean_splits_path = op.join(searchlight_res_dir,'intersubj_balancedacc_rad{:05.2f}mm_{}_permut{:04d}_mean.nii.gz'.format(searchlight_radius,crossval_case,permutation_ind))
-print('Saving average score map: {}'.format(mean_splits_path))
-mean_splits_nii.to_filename(mean_splits_path)
+# 1. read pre-defined xval inds
+[allsplits_xval_inds, y] = joblib.load(roi_xval_path)
+
+# 2. extract indices for current_split
+currentsplit_xval_inds = allsplits_xval_inds[current_split]
+train_key = 'train_{}'.format(train_modality)
+train_inds = currentsplit_xval_inds[train_key]
+test_key = 'train_{}'.format(test_modality)
+test_inds = currentsplit_xval_inds[test_key]
+
+# 3. define fmri_nii_specific and y_specific for the given pair of (train_modality, test_modality)
+# need to remap fmri_nii and y to restrict them in order to minimize mapping time at the beginning
+# of searchlight fit
+# I NEED TO VALIDATE THIS BY RUNNING ONE SEARCHLIGHT WITH AND WITHOUT, coz it's dangerous ;)
+testtrain_inds = np.concatenate([train_inds,test_inds])
+y_specific = y[testtrain_inds]
+
+# 4. define single split xval and searchlight
+single_split = [(train_inds, test_inds)]
+# y_train = y_specific[train_inds]
+# n_samples = len(y_train)
+# class_labels = np.unique(y_train)
+# n_classes = len(class_labels)
+# weights_list = []
+# for c in class_labels:
+#     weight = float(n_samples) / (n_classes * np.sum(y_train == c))
+#     weights_list.append(weight)
+# class_weight = {class_labels[0]: weights_list[0], class_labels[1]: weights_list[1]}
+# print('Class weights used for classifier estimation:', class_weight)
+# define our estimator (which uses the weights!)
+# weighted_clf = SVC(kernel="linear", class_weight=class_weight, C=0.001)
+#weighted_clf = LogisticRegression(C=0.1, class_weight=class_weight)
+weighted_clf = LogisticRegression(C=0.1, class_weight='balanced')
+# now we can call the searchlight with all these options
+print("...preparing searchlight for this split")
+searchlight = SearchLight(mask_nii,
+                          process_mask_img=mask_nii,
+                          radius=searchlight_radius,
+                          n_jobs=n_jobs,
+                          verbose=1,
+                          cv=single_split,
+                          scoring=make_scorer(balanced_accuracy),
+                          estimator=weighted_clf)
+
+# 5. fit searchlight
+print("...fitting searchlight for this split!")
+searchlight.fit(fmri_img_specific, y_specific)
+
+# 6. save res, with the 4 parameters in the filename
+
+single_split_nii = new_img_like(mask_nii,searchlight.scores_)
+single_split_path = op.join(single_split_res_dir,'intersubj_balancedacc_rad{:05.2f}mm_{}_permut{:04d}_split{:1d}of{:1d}.nii.gz'.format(searchlight_radius,crossval_case,permutation_ind,split_ind+1,n_splits))
+print('Saving score map for {} and fold number {:02d}'.format(subject,split_ind+1))
+single_split_nii.to_filename(single_split_path)
+single_split_path_list.append(single_split_path)
+
 
 
 
