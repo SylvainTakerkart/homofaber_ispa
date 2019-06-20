@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import os.path as op
+import sys
 import joblib
 
 import nibabel as nb
@@ -52,10 +53,10 @@ def run_crossmodal_searchlight(split_ind, train_modality, test_modality, searchl
 
 
 
-    split_ind = 12
-    train_modality = 'A'
-    test_modality = 'V'
-    searchlight_radius = 3
+    #split_ind = 12
+    #train_modality = 'A'
+    #test_modality = 'V'
+    #searchlight_radius = 3
 
 
 
