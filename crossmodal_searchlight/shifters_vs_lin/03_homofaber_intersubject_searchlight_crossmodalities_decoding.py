@@ -52,16 +52,6 @@ def run_crossmodal_searchlight(split_ind, train_modality, test_modality, searchl
     """
 
 
-
-    #split_ind = 12
-    #train_modality = 'A'
-    #test_modality = 'V'
-    #searchlight_radius = 3
-
-
-
-
-
     # defining all input directories
     mvpa_subdir = 'mvpa_{}_analyses'.format(mvpa_question)
     permutations_dir = op.join(root_dir,
@@ -183,7 +173,7 @@ def run_crossmodal_searchlight(split_ind, train_modality, test_modality, searchl
 
     single_split_nii = new_img_like(mask_nii,searchlight.scores_)
     single_split_path = op.join(single_split_res_dir,'intersubj_balancedacc_rad{:05.2f}mm_train{}test{}_split{:1d}of{:1d}.nii.gz'.format(searchlight_radius,train_modality,test_modality,split_ind+1,n_splits))
-    print('Saving score map for {}, fold number {:02d} of {:02d}'.format(subjects_list[split_ind],split_ind+1,n_splits))
+    print('Saving score map for {}, fold number {:02d} of {:02d} into {}'.format(subjects_list[split_ind],split_ind+1,n_splits, single_split_path))
     single_split_nii.to_filename(single_split_path)
     #single_split_path_list.append(single_split_path)
 
