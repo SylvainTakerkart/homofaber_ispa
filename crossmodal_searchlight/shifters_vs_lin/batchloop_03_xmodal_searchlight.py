@@ -10,7 +10,7 @@ subjects_list = ['homofaber_00']
 
 modality_list = ['A','V']
 
-searchlight_radius = 3.
+searchlight_radius = 9.
 
 for split_ind, subject in enumerate(subjects_list):
     for train_modality in modality_list:
