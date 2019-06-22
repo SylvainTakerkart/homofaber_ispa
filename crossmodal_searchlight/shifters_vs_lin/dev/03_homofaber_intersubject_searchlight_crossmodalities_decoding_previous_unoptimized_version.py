@@ -27,7 +27,7 @@ subjects_list = ['homofaber_00', 'homofaber_01', 'homofaber_02', 'homofaber_03',
 
 mvpa_question = 'Lin_vs_Fil'
 
-n_jobs = 24
+n_jobs = 8
 
 
 def run_crossmodal_searchlight(split_ind, train_modality, test_modality, searchlight_radius):
@@ -89,42 +89,42 @@ def run_crossmodal_searchlight(split_ind, train_modality, test_modality, searchl
     roi_xval_path = op.join(roi_xval_dir,"xval_inds_leave{}subjectsout.jl".format(n_leftout_subjects))
 
 
-    # read mask_nii if it exists already
-    # if not, compute it and save it to disk for future use
-    # this should become a function!
-    mask_path = op.join(root_dir, mvpa_subdir, 'mask.nii')
-    if op.exists(mask_path):
-        mask_nii = nb.load(mask_path)
-    else:
-        fmri_nii_list = []
-        subjmask_list = []
-        for subj_ind, subject in enumerate(subjects_list):
-            classif_metadata_path = op.join(classif_metadata_dir,subject+'_classif_metadata.jl')
-            [y_subj,session_xval,modality,beta_numbers] = joblib.load(classif_metadata_path)
+    # read mask_nii and fmri_img if it exists already
+    y = []
+    subj_vect = []
+    fmri_nii_list = []
+    subjmask_list = []
+    for subj_ind, subject in enumerate(subjects_list):
+        classif_metadata_path = op.join(classif_metadata_dir,subject+'_classif_metadata.jl')
+        [y_subj,session_xval,modality,beta_numbers] = joblib.load(classif_metadata_path)
+        y.extend(y_subj)
+        subj_vect.extend(subj_ind*np.ones(len(y_subj)))
 
-            subject_dir = op.join(root_dir, subject)
-            betas_dir = op.join(subject_dir, spm_modelname)
-            for current_beta_ind in beta_numbers:
-                beta_path = op.join(betas_dir, 'Cbeta_{:04d}.nii'.format(current_beta_ind))
-                print(beta_path)
-                beta_nii = nb.load(beta_path)
-                fmri_nii_list.append(beta_nii)
+        subject_dir = op.join(root_dir, subject)
+        betas_dir = op.join(subject_dir, spm_modelname)
 
-            subjmask_name = op.join(betas_dir,'mask.nii')
-            subjmask_nii = nb.load(subjmask_name)
-            subjmask_list.append(subjmask_nii)
+        for current_beta_ind in beta_numbers:
+            beta_path = op.join(betas_dir, 'Cbeta_{:04d}.nii'.format(current_beta_ind))
+            print(beta_path)
+            beta_nii = nb.load(beta_path)
+            #sbeta_nii = smooth_img(beta_nii, fwhm=fwhm)
+            #sbeta_data = sbeta_nii.get_data()
+            fmri_nii_list.append(beta_nii)
 
-        print("Intersecting the masks from all the subjects...")
-        mask_nii = intersect_masks(subjmask_list)
-        mask_nii.to_filename(mask_path)
+        subjmask_name = op.join(betas_dir,'mask.nii')
+        subjmask_nii = nb.load(subjmask_name)
+        subjmask_list.append(subjmask_nii)
+
+    subj_vect = np.array(subj_vect)
+
+    print("Intersecting the masks from all the subjects...")
+    mask_nii = intersect_masks(subjmask_list)
+    print("Concatenating the data from all the subjects...")
+    fmri_img = concat_imgs(fmri_nii_list)
 
     # write mask_nii and fmri_img if it does not exist yet!
 
     # 1. read pre-defined xval inds
-    # note that all these indices are defined at the level of the full list
-    # of files (all beta maps from all subjects)
-    # we will need to restrict them to specific indices to our current
-    # problem, in conjunction with specific labels and a specific list of files
     [allsplits_xval_inds, y] = joblib.load(roi_xval_path)
 
     # 2. extract indices for current_split
@@ -143,29 +143,8 @@ def run_crossmodal_searchlight(split_ind, train_modality, test_modality, searchl
     #testtrain_inds = np.concatenate([train_inds,test_inds])
     #y_specific = y[testtrain_inds]
 
-    # construct full list of files (not specific to this fold)
-    fmri_flist = []
-    for subj_ind, subject in enumerate(subjects_list):
-        classif_metadata_path = op.join(classif_metadata_dir,subject+'_classif_metadata.jl')
-        [y_subj,session_xval,modality,beta_numbers] = joblib.load(classif_metadata_path)
-
-        subject_dir = op.join(root_dir, subject)
-        betas_dir = op.join(subject_dir, spm_modelname)
-        for current_beta_ind in beta_numbers:
-            beta_path = op.join(betas_dir, 'Cbeta_{:04d}.nii'.format(current_beta_ind))
-            print(beta_path)
-            fmri_flist.append(beta_path)
-    fmri_flist = np.array(fmri_flist)
-
-    # re-organize images filenames and labels so that all the train is at the beginning of the
-    # list and all the test is at the end, to facilitate things
-    fmri_specific_flist = np.concatenate([fmri_flist[train_inds], fmri_flist[test_inds]])
-    y_specific = np.concatenate([y[train_inds], y[test_inds]])
-    train_inds_specific = np.arange(len(train_inds))
-    test_inds_specific = len(train_inds) + np.arange(len(test_inds))
-
     # 4. define single split xval and searchlight
-    single_split = [(train_inds_specific, test_inds_specific)]
+    single_split = [(train_inds, test_inds)]
     weighted_clf = LogisticRegression(C=0.1, class_weight='balanced')
     # now we can call the searchlight with all these options
     print("...preparing searchlight for this split")
@@ -180,12 +159,13 @@ def run_crossmodal_searchlight(split_ind, train_modality, test_modality, searchl
 
     # 5. fit searchlight
     print("...fitting searchlight for this split!")
-    searchlight.fit(fmri_specific_flist, y_specific)
+    searchlight.fit(fmri_img, y)
+    #searchlight.fit(fmri_img_specific, y_specific)
 
     # 6. save res, with the 4 parameters in the filename
 
     single_split_nii = new_img_like(mask_nii,searchlight.scores_)
-    single_split_path = op.join(single_split_res_dir,'intersubj_balancedacc_rad{:05.2f}mm_train{}test{}_split{:1d}of{:1d}_specific.nii.gz'.format(searchlight_radius,train_modality,test_modality,split_ind+1,n_splits))
+    single_split_path = op.join(single_split_res_dir,'intersubj_balancedacc_rad{:05.2f}mm_train{}test{}_split{:1d}of{:1d}.nii.gz'.format(searchlight_radius,train_modality,test_modality,split_ind+1,n_splits))
     print('Saving score map for {}, fold number {:02d} of {:02d} into {}'.format(subjects_list[split_ind],split_ind+1,n_splits, single_split_path))
     single_split_nii.to_filename(single_split_path)
     #single_split_path_list.append(single_split_path)
