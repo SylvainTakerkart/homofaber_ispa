@@ -6,8 +6,6 @@ subjects_list = ['homofaber_00', 'homofaber_01', 'homofaber_02', 'homofaber_03',
                  'homofaber_05', 'homofaber_06', 'homofaber_07', 'homofaber_08', 'homofaber_09',
                  'homofaber_11', 'homofaber_12', 'homofaber_13', 'homofaber_14', 'homofaber_16']
 
-subjects_list = ['homofaber_00']
-
 modality_list = ['A','V']
 
 searchlight_radius = 9.
