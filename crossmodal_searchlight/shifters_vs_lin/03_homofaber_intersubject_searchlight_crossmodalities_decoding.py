@@ -26,7 +26,7 @@ subjects_list = ['homofaber_00', 'homofaber_01', 'homofaber_02', 'homofaber_03',
 
 mvpa_question = 'Lin_vs_Fil'
 
-n_jobs = 8
+n_jobs = 24
 
 
 def run_crossmodal_searchlight(split_ind, train_modality, test_modality, searchlight_radius):

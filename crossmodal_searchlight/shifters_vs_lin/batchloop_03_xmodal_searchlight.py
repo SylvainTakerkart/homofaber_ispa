@@ -19,6 +19,6 @@ searchlight_radius = 3.
 for split_ind, subject in enumerate(subjects_list):
     for train_modality in modality_list:
         for test_modality in modality_list:
-            cmd = "frioul_batch -c 4 'anaconda_setup; python {}/03_homofaber_intersubject_searchlight_crossmodalities_decoding.py {:02d} {} {} {:1.2f}'".format(split_ind, train_modality, test_modality, searchlight_radius)
+            cmd = "frioul_batch -c 12 'anaconda_setup; python {}/03_homofaber_intersubject_searchlight_crossmodalities_decoding.py {:02d} {} {} {:1.2f}'".format(split_ind, train_modality, test_modality, searchlight_radius)
             print(cmd)
             subprocess.run(bv_cmd,shell=True)
